@@ -4,7 +4,8 @@ shopt -s nullglob
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 LOCKFILES="$SCRIPT_DIR/../Cargo.lock $SCRIPT_DIR/../gui/package-lock.json"
 # The policy of enforcing lockfiles to be signed was not in place before this commit and as such some of the commits before are not signed
-WHITELIST_COMMIT="bdf327cfa"
+# The whitelisted commit can be set in order to allow github actions to only check since origin/master
+WHITELIST_COMMIT=${1:-"bdf327cfa"}
 
 unsigned_commits_exist=0
 for LOCKFILE in $LOCKFILES;
