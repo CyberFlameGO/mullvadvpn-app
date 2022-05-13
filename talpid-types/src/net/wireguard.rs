@@ -253,6 +253,14 @@ impl fmt::Display for PublicKey {
     }
 }
 
+pub struct PresharedKey([u8; 32]);
+
+impl From<[u8; 32]> for PresharedKey {
+    fn from(key: [u8; 32]) -> PresharedKey {
+        PresharedKey(key)
+    }
+}
+
 fn serialize_key<S>(key: &[u8; 32], serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
