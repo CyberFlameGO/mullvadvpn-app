@@ -1,4 +1,4 @@
-name: Android - Audit dependencies
+name: Verify lockfile signatures
 on:
     pull_request:
         paths:
