@@ -1,0 +1,14 @@
+name: Android - Audit dependencies
+on:
+    pull_request:
+        paths:
+            - .github/workflows/verify-lockfile-signatures.yml
+            - Cargo.lock
+            - gui/package-lock.json
+    workflow_dispatch:
+jobs:
+    verify-signatures:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+            - run: ci/verify-lockfile-signature.sh
