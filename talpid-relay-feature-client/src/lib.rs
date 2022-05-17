@@ -75,7 +75,6 @@ async fn generate_key() -> Result<(kem::PublicKey, SecretKey), Error> {
     rx.await.unwrap()
 }
 
-
 fn algorithm_to_string(algorithm: &Algorithm) -> String {
     match algorithm {
         Algorithm::ClassicMcEliece8192128f => "Classic-McEliece-8192128f".to_string(),
