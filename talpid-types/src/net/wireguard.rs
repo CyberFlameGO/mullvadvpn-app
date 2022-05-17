@@ -253,6 +253,7 @@ impl fmt::Display for PublicKey {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct PresharedKey([u8; 32]);
 
 impl From<[u8; 32]> for PresharedKey {
