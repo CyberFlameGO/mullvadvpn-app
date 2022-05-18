@@ -80,7 +80,7 @@ pub enum Error {
 
     /// Failed to negotiate PQ PSK
     #[error(display = "Failed to negotiate PQ PSK")]
-    PskNegotiationError(talpid_relay_feature_client::Error),
+    PskNegotiationError(talpid_relay_config_client::Error),
 
     /// Failed to set up IP interfaces.
     #[cfg(windows)]
@@ -293,7 +293,7 @@ impl WireguardMonitor {
 
             if let Some(pubkey) = psk_negotiation {
                 // TODO: add timeout
-                let (private_key, psk) = talpid_relay_feature_client::push_pq_key(
+                let (private_key, psk) = talpid_relay_config_client::push_pq_key(
                     IpAddr::V4(config.ipv4_gateway),
                     config.tunnel.private_key.public_key(),
                 )

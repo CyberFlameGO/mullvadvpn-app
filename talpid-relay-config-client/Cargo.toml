@@ -1,5 +1,5 @@
 [package]
-name = "talpid-relay-feature-client"
+name = "talpid-relay-config-client"
 version = "0.1.0"
 authors = ["Mullvad VPN"]
 description = "Uses relays to set up PQ-safe peers, etc."

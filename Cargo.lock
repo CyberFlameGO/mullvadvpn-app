@@ -3493,7 +3493,7 @@ dependencies = [
  "system-configuration",
  "talpid-dbus",
  "talpid-platform-metadata",
- "talpid-relay-feature-client",
+ "talpid-relay-config-client",
  "talpid-time",
  "talpid-types",
  "tempfile",
@@ -3554,7 +3554,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "talpid-relay-feature-client"
+name = "talpid-relay-config-client"
 version = "0.1.0"
 dependencies = [
  "oqs",
