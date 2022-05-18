@@ -125,7 +125,7 @@ impl Tunnel for NetlinkTunnel {
                 .await
                 .map_err(|err| {
                     log::error!("Failed to fetch WireGuard device config: {}", err);
-                    TunnelError::GetConfigError
+                    TunnelError::SetConfigError
                 })
         })
     }
