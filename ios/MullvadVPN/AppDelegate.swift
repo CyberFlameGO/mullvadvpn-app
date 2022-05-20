@@ -69,12 +69,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         if #available(iOS 13.0, *) {
             // Register background tasks on iOS 13
-            RelayCache.Tracker.shared.registerAppRefreshTask()
-            TunnelManager.shared.registerBackgroundTask()
-            addressCacheTracker.registerBackgroundTask()
+            registerBackgroundTasks()
         } else {
             // Set background refresh interval on iOS 12
-            application.setMinimumBackgroundFetchInterval(ApplicationConfiguration.minimumBackgroundFetchInterval)
+            application.setMinimumBackgroundFetchInterval(
+                ApplicationConfiguration.minimumBackgroundFetchInterval
+            )
         }
 
         // Assign user notification center delegate
@@ -154,7 +154,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationDidEnterBackground(_ application: UIApplication) {
         if #available(iOS 13, *) {
-            scheduleBackgroundTasks()
+            scheduleAppRefreshTask()
+            scheduleKeyRotationTask()
+            scheduleAddressCacheUpdateTask()
         }
     }
 
@@ -271,34 +273,123 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     // MARK: - Private
 
-    @available(iOS 13.0, *)
-    private func scheduleBackgroundTasks() {
-        do {
-            try RelayCache.Tracker.shared.scheduleAppRefreshTask()
+    @available(iOS 13, *)
+    private func registerBackgroundTasks() {
+        var isRegistered = BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: ApplicationConfiguration.privateKeyRotationTaskIdentifier,
+            using: nil
+        ) { task in
+            let handle = TunnelManager.shared.rotatePrivateKey { completion in
+                task.setTaskCompleted(success: completion.isSuccess)
+            }
 
-            logger?.debug("Scheduled app refresh task.")
+            task.expirationHandler = {
+                handle.cancel()
+            }
+
+            // TODO: schedule next update
+        }
+
+        if isRegistered {
+            logger?.debug("Registered private key rotation task.")
+        } else {
+            logger?.error("Failed to register private key rotation task.")
+        }
+
+        isRegistered = BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: ApplicationConfiguration.appRefreshTaskIdentifier,
+            using: nil
+        ) { task in
+            let handle = RelayCache.Tracker.shared.updateRelays { completion in
+                task.setTaskCompleted(success: completion.isSuccess)
+            }
+
+            task.expirationHandler = {
+                handle.cancel()
+            }
+
+            // TODO: schedule next update
+        }
+
+        if isRegistered {
+            logger?.debug("Registered app refresh task.")
+        } else {
+            logger?.error("Failed to register app refresh task.")
+        }
+
+        isRegistered = BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: ApplicationConfiguration.addressCacheUpdateTaskIdentifier,
+            using: nil
+        ) { task in
+            let handle = self.addressCacheTracker.updateEndpoints { completion in
+                task.setTaskCompleted(success: completion.isSuccess)
+            }
+
+            task.expirationHandler = {
+                handle.cancel()
+            }
+
+            // TODO: schedule next update
+        }
+
+        if isRegistered {
+            logger?.debug("Registered address cache update task.")
+        } else {
+            logger?.error("Failed to register address cache update task.")
+        }
+    }
+
+    @available(iOS 13.0, *)
+    private func scheduleAppRefreshTask() {
+        do {
+            // TODO: fix date
+            let date = Date()
+            let request = BGAppRefreshTaskRequest(
+                identifier: ApplicationConfiguration.appRefreshTaskIdentifier
+            )
+            request.earliestBeginDate = date
+
+            try BGTaskScheduler.shared.submit(request)
         } catch {
             logger?.error(
                 chainedError: AnyChainedError(error),
                 message: "Could not schedule app refresh task."
             )
         }
+    }
 
+    @available(iOS 13.0, *)
+    private func scheduleKeyRotationTask() {
         do {
-            try TunnelManager.shared.scheduleBackgroundTask()
+            // TODO: fix date
+            let date = Date()
+            let request = BGProcessingTaskRequest(
+                identifier: ApplicationConfiguration.privateKeyRotationTaskIdentifier
+            )
+            request.requiresNetworkConnectivity = true
+            request.earliestBeginDate = date
 
-            logger?.debug("Scheduled private key rotation task.")
+            try BGTaskScheduler.shared.submit(request)
         } catch {
             logger?.error(
                 chainedError: AnyChainedError(error),
                 message: "Could not schedule private key rotation task."
             )
         }
+    }
 
+    @available(iOS 13.0, *)
+    private func scheduleAddressCacheUpdateTask() {
         do {
-            try addressCacheTracker.scheduleBackgroundTask()
+            // TODO: fix date
+            let date = Date()
+            let request = BGProcessingTaskRequest(
+                identifier: ApplicationConfiguration.addressCacheUpdateTaskIdentifier
+            )
+            request.requiresNetworkConnectivity = true
+            request.earliestBeginDate = date
 
-            self.logger?.debug("Scheduled address cache update task.")
+            try BGTaskScheduler.shared.submit(request)
         } catch {
             self.logger?.error(
                 chainedError: AnyChainedError(error),
