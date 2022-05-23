@@ -278,6 +278,32 @@ impl fmt::Display for AllowedEndpoint {
     }
 }
 
+/// Defines a network for which traffic should be permitted by the firewall.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct AllowedNetwork {
+    pub network: ipnetwork::IpNetwork,
+    pub port: u16,
+    pub protocol: Protocol,
+}
+
+/// A protocol: UDP, TCP, or ICMP.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum Protocol {
+    Udp,
+    Tcp,
+    IcmpV4,
+    IcmpV6,
+}
+
+impl From<TransportProtocol> for Protocol {
+    fn from(proto: TransportProtocol) -> Self {
+        match proto {
+            TransportProtocol::Udp => Protocol::Udp,
+            TransportProtocol::Tcp => Protocol::Tcp,
+        }
+    }
+}
+
 /// IP protocol version.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]

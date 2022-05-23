@@ -14,7 +14,7 @@ use std::{
     io,
     net::{IpAddr, Ipv4Addr},
 };
-use talpid_types::net::{Endpoint, TransportProtocol};
+use talpid_types::net::{AllowedNetwork, Endpoint, Protocol, TransportProtocol};
 
 /// Priority for rules that tag split tunneling packets. Equals NF_IP_PRI_MANGLE.
 const MANGLE_CHAIN_PRIORITY: i32 = libc::NF_IP_PRI_MANGLE;
@@ -558,6 +558,7 @@ impl<'a> PolicyBatch<'a> {
                 tunnel,
                 allow_lan,
                 allowed_endpoint,
+                allowed_tunnel_nets,
             } => {
                 self.add_allow_tunnel_endpoint_rules(peer_endpoint);
                 self.add_allow_endpoint_rules(&allowed_endpoint.endpoint);
@@ -567,7 +568,7 @@ impl<'a> PolicyBatch<'a> {
                 self.add_drop_dns_rule();
 
                 if let Some(tunnel) = tunnel {
-                    self.add_allow_tunnel_rules(&tunnel.interface)?;
+                    self.add_allow_tunnel_nets_rules(&tunnel.interface, allowed_tunnel_nets)?;
                     if *allow_lan {
                         self.add_block_cve_2019_14899(tunnel);
                     }
@@ -769,6 +770,38 @@ impl<'a> PolicyBatch<'a> {
             add_verdict(&mut block_tcp_rule, &Verdict::Reject(RejectionType::TcpRst));
             self.batch.add(&block_tcp_rule, nftnl::MsgType::Add);
         }
+    }
+
+    fn add_allow_tunnel_nets_rules(
+        &mut self,
+        tunnel_interface: &str,
+        allowed_nets: &[AllowedNetwork],
+    ) -> Result<()> {
+        for net in allowed_nets {
+            for (chain, dir, end) in [
+                (&self.out_chain, Direction::Out, End::Dst),
+                (&self.in_chain, Direction::In, End::Src),
+            ] {
+                let mut rule = Rule::new(chain);
+
+                check_iface(&mut rule, dir, tunnel_interface)?;
+                check_net(&mut rule, end, net.network);
+                match net.protocol {
+                    Protocol::IcmpV4 | Protocol::IcmpV6 => {
+                        check_l4proto(&mut rule, net.protocol.clone())
+                    }
+                    Protocol::Tcp => {
+                        check_port(&mut rule, TransportProtocol::Tcp, end, net.port);
+                    }
+                    Protocol::Udp => {
+                        check_port(&mut rule, TransportProtocol::Udp, end, net.port);
+                    }
+                }
+                add_verdict(&mut rule, &Verdict::Accept);
+                self.batch.add(&rule, nftnl::MsgType::Add);
+            }
+        }
+        Ok(())
     }
 
     fn add_allow_tunnel_rules(&mut self, tunnel_interface: &str) -> Result<()> {
@@ -988,7 +1021,7 @@ fn check_ip(rule: &mut Rule<'_>, end: End, ip: impl Into<IpAddr>) {
 
 fn check_port(rule: &mut Rule<'_>, protocol: TransportProtocol, end: End, port: u16) {
     // Must check transport layer protocol before loading transport layer payload
-    check_l4proto(rule, protocol);
+    check_l4proto(rule, protocol.into());
 
     rule.add_expr(&match (protocol, end) {
         (TransportProtocol::Udp, End::Src) => nft_expr!(payload udp sport),
@@ -1011,15 +1044,17 @@ fn l3proto(addr: IpAddr) -> u8 {
     }
 }
 
-fn check_l4proto(rule: &mut Rule<'_>, protocol: TransportProtocol) {
+fn check_l4proto(rule: &mut Rule<'_>, protocol: Protocol) {
     rule.add_expr(&nft_expr!(meta l4proto));
     rule.add_expr(&nft_expr!(cmp == l4proto(protocol)));
 }
 
-fn l4proto(protocol: TransportProtocol) -> u8 {
+fn l4proto(protocol: Protocol) -> u8 {
     match protocol {
-        TransportProtocol::Udp => libc::IPPROTO_UDP as u8,
-        TransportProtocol::Tcp => libc::IPPROTO_TCP as u8,
+        Protocol::Udp => libc::IPPROTO_UDP as u8,
+        Protocol::Tcp => libc::IPPROTO_TCP as u8,
+        Protocol::IcmpV4 => libc::IPPROTO_ICMP as u8,
+        Protocol::IcmpV6 => libc::IPPROTO_ICMPV6 as u8,
     }
 }
 
