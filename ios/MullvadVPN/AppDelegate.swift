@@ -154,9 +154,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func applicationDidEnterBackground(_ application: UIApplication) {
         if #available(iOS 13, *) {
-            scheduleAppRefreshTask()
-            scheduleKeyRotationTask()
-            scheduleAddressCacheUpdateTask()
+            scheduleBackgroundTasks()
         }
     }
 
@@ -182,15 +180,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         let updateRelaysOperation = AsyncBlockOperation(dispatchQueue: .main) { operation in
             let handle = RelayCache.Tracker.shared.updateRelays { completion in
-                switch completion {
-                case .success(let result):
-                    self.logger?.debug("Finished updating relays: \(result).")
-                case .failure(let error):
-                    self.logger?.error(chainedError: error, message: "Failed to update relays.")
-                case .cancelled:
-                    break
-                }
-
                 relaysFetchResult = completion.backgroundFetchResult
                 operation.finish()
             }
@@ -201,17 +190,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         }
 
         let rotatePrivateKeyOperation = AsyncBlockOperation(dispatchQueue: .main) { operation in
-            let handle = TunnelManager.shared.rotatePrivateKey { completion in
-                switch completion {
-                case .success(let rotationResult):
-                    self.logger?.debug("Finished rotating the key: \(rotationResult).")
-                case .failure(let error):
-                    self.logger?.error(chainedError: error, message: "Failed to rotate the key.")
-                case .cancelled:
-                    break
-                }
-
-                rotatePrivateKeyFetchResult = completion.backgroundFetchResult
+            let handle = TunnelManager.shared.rotatePrivateKey(forceRotate: false) { completion in
+                rotatePrivateKeyFetchResult = completion.backgroundFetchResult { $0 }
                 operation.finish()
             }
 
@@ -220,20 +200,31 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             }
         }
 
-        rotatePrivateKeyOperation.addDependencies([updateRelaysOperation, updateAddressCacheOperation])
+        rotatePrivateKeyOperation.addDependencies([
+            updateRelaysOperation,
+            updateAddressCacheOperation
+        ])
 
-        let backgroundTaskIdentifier = UIApplication.shared.beginBackgroundTask(withName: "AppDelegate.performFetch") {
+        let backgroundTaskIdentifier = UIApplication.shared.beginBackgroundTask(
+            withName: "AppDelegate.performFetch"
+        ) {
             operationQueue.cancelAllOperations()
         }
 
         let fetchOperations = [updateAddressCacheOperation, updateRelaysOperation, rotatePrivateKeyOperation]
 
         let completionOperation = BlockOperation {
-            let operationResults = [addressCacheFetchResult, relaysFetchResult, rotatePrivateKeyFetchResult].compactMap { $0 }
+            let operationResults = [
+                addressCacheFetchResult,
+                relaysFetchResult,
+                rotatePrivateKeyFetchResult
+            ].compactMap { $0 }
+
             let initialResult = operationResults.first ?? .failed
-            let backgroundFetchResult = operationResults.reduce(initialResult) { partialResult, other in
-                return partialResult.combine(with: other)
-            }
+            let backgroundFetchResult = operationResults
+                .reduce(initialResult) { partialResult, other in
+                    return partialResult.combine(with: other)
+                }
 
             self.logger?.info("Finish background refresh with \(backgroundFetchResult)")
 
@@ -271,32 +262,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Use this method to release any resources that were specific to the discarded scenes, as they will not return.
     }
 
-    // MARK: - Private
+    // MARK: - Background tasks
 
     @available(iOS 13, *)
     private func registerBackgroundTasks() {
-        var isRegistered = BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: ApplicationConfiguration.privateKeyRotationTaskIdentifier,
-            using: nil
-        ) { task in
-            let handle = TunnelManager.shared.rotatePrivateKey { completion in
-                task.setTaskCompleted(success: completion.isSuccess)
-            }
+        registerAppRefreshTask()
+        registerAddressCacheUpdateTask()
+        registerKeyRotationTask()
+    }
 
-            task.expirationHandler = {
-                handle.cancel()
-            }
-
-            // TODO: schedule next update
-        }
-
-        if isRegistered {
-            logger?.debug("Registered private key rotation task.")
-        } else {
-            logger?.error("Failed to register private key rotation task.")
-        }
-
-        isRegistered = BGTaskScheduler.shared.register(
+    @available(iOS 13.0, *)
+    private func registerAppRefreshTask() {
+        let isRegistered = BGTaskScheduler.shared.register(
             forTaskWithIdentifier: ApplicationConfiguration.appRefreshTaskIdentifier,
             using: nil
         ) { task in
@@ -316,8 +293,37 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         } else {
             logger?.error("Failed to register app refresh task.")
         }
+    }
 
-        isRegistered = BGTaskScheduler.shared.register(
+    @available(iOS 13.0, *)
+    private func registerKeyRotationTask() {
+        let isRegistered = BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: ApplicationConfiguration.privateKeyRotationTaskIdentifier,
+            using: nil
+        ) { task in
+            let handle = TunnelManager.shared.rotatePrivateKey(forceRotate: false) { completion in
+                self.scheduleKeyRotationTask()
+
+                task.setTaskCompleted(success: completion.isSuccess)
+            }
+
+            task.expirationHandler = {
+                handle.cancel()
+            }
+
+            // TODO: schedule next update
+        }
+
+        if isRegistered {
+            logger?.debug("Registered private key rotation task.")
+        } else {
+            logger?.error("Failed to register private key rotation task.")
+        }
+    }
+
+    @available(iOS 13.0, *)
+    private func registerAddressCacheUpdateTask() {
+        let isRegistered = BGTaskScheduler.shared.register(
             forTaskWithIdentifier: ApplicationConfiguration.addressCacheUpdateTaskIdentifier,
             using: nil
         ) { task in
@@ -340,10 +346,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     @available(iOS 13.0, *)
+    private func scheduleBackgroundTasks() {
+        scheduleAppRefreshTask()
+        scheduleKeyRotationTask()
+        scheduleAddressCacheUpdateTask()
+    }
+
+    @available(iOS 13.0, *)
     private func scheduleAppRefreshTask() {
         do {
-            // TODO: fix date
-            let date = Date()
+            let date = Calendar.current.date(
+                byAdding: .hour,
+                value: 1,
+                to: Date()
+            )
+
             let request = BGAppRefreshTaskRequest(
                 identifier: ApplicationConfiguration.appRefreshTaskIdentifier
             )
@@ -361,8 +378,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     @available(iOS 13.0, *)
     private func scheduleKeyRotationTask() {
         do {
-            // TODO: fix date
-            let date = Date()
+            guard let date = TunnelManager.shared.getNextKeyRotationDate() else {
+                return
+            }
+
             let request = BGProcessingTaskRequest(
                 identifier: ApplicationConfiguration.privateKeyRotationTaskIdentifier
             )
@@ -397,6 +416,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             )
         }
     }
+
+    // MARK: - Private
 
     private func didFinishInitialization() {
         self.logger?.debug("Finished initialization. Show user interface.")

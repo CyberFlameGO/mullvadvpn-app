@@ -21,12 +21,12 @@ extension OperationCompletion where Success == AddressCache.CacheUpdateResult {
     }
 }
 
-extension OperationCompletion where Success == TunnelManager.KeyRotationResult {
-    var backgroundFetchResult: UIBackgroundFetchResult {
+extension OperationCompletion {
+    func backgroundFetchResult(_ hasNewData: (Success) -> Bool) -> UIBackgroundFetchResult {
         switch self {
-        case .success(.finished):
-            return .newData
-        case .success(.throttled), .cancelled:
+        case .success(let value):
+            return hasNewData(value) ? .newData : .noData
+        case .cancelled:
             return .noData
         case .failure:
             return .failed
