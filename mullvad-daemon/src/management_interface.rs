@@ -373,11 +373,11 @@ impl ManagementService for ManagementServiceImpl {
             .map_err(map_settings_error)
     }
 
-    async fn set_post_quantum_safety(&self, request: Request<bool>) -> ServiceResult<()> {
+    async fn set_quantum_resistant_tunnel(&self, request: Request<bool>) -> ServiceResult<()> {
         let enable = request.into_inner();
-        log::debug!("set_post_quantum_safety({})", enable);
+        log::debug!("set_quantum_resistant_tunnel({})", enable);
         let (tx, rx) = oneshot::channel();
-        self.send_command_to_daemon(DaemonCommand::SetPostQuantumSafety(tx, enable))?;
+        self.send_command_to_daemon(DaemonCommand::SetQuantumResistantTunnel(tx, enable))?;
         self.wait_for_result(rx)
             .await?
             .map(Response::new)

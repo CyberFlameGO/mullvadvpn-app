@@ -236,7 +236,10 @@ impl SettingsPersister {
         self.update(should_save).await
     }
 
-    pub async fn set_post_quantum_safety(&mut self, use_pq_safe_psk: bool) -> Result<bool, Error> {
+    pub async fn set_quantum_resistant_tunnel(
+        &mut self,
+        use_pq_safe_psk: bool,
+    ) -> Result<bool, Error> {
         let should_save = Self::update_field(
             &mut self
                 .settings

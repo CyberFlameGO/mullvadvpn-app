@@ -254,7 +254,7 @@ impl Tunnel {
                 "PQ PSK exchange does not work when multihop is enabled",
             ));
         }
-        rpc.set_post_quantum_safety(new_state).await?;
+        rpc.set_quantum_resistant_tunnel(new_state).await?;
         println!("Updated quantum resistant tunnel setting");
         Ok(())
     }
