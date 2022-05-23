@@ -564,18 +564,6 @@ impl NetworkManager {
         Ok(settings_backup)
     }
 
-    pub fn set_wireguard_settings(
-        &mut self,
-        interface_name: &str,
-        config: DeviceConfig,
-    ) -> Result<DeviceConfig> {
-        let device_path = self.fetch_device(interface_name)?;
-        self.wait_until_device_is_ready(&device_path)?;
-
-        self.reapply_settings(&device_path, settings, version_id)?;
-        Ok(settings_backup)
-    }
-
     pub fn reapply_settings<Settings: arg::Append>(
         &self,
         device: &dbus::Path<'_>,
