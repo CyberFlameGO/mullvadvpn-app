@@ -349,6 +349,8 @@ mod winfw {
     pub enum WinFwProt {
         Tcp = 0u8,
         Udp = 1u8,
+        Icmp = 2u8,
+        IcmpV6 = 3u8,
     }
 
     impl From<TransportProtocol> for WinFwProt {

@@ -233,7 +233,9 @@ WinFw_ApplyPolicyConnecting(
 	const WinFwEndpoint *relay,
 	const wchar_t *relayClient,
 	const wchar_t *tunnelInterfaceAlias,
-	const WinFwAllowedEndpoint *allowedEndpoint
+	const WinFwAllowedEndpoint *allowedEndpoint,
+	const WinFwEndpoint **allowedTunnelEndpoints,
+	size_t numAllowedTunnelEndpoints
 )
 {
 	if (nullptr == g_fwContext)
