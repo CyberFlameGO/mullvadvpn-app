@@ -798,6 +798,8 @@ impl<'a> PolicyBatch<'a> {
                         check_port(&mut rule, TransportProtocol::Udp, end, ep.address.port());
                     }
                 }
+                rule.add_expr(&nft_expr!(meta skuid));
+                rule.add_expr(&nft_expr!(cmp == super::ROOT_UID));
                 add_verdict(&mut rule, &Verdict::Accept);
                 self.batch.add(&rule, nftnl::MsgType::Add);
             }
