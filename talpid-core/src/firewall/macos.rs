@@ -129,8 +129,9 @@ impl Firewall {
                 rules.append(&mut self.get_block_dns_rules()?);
 
                 if let Some(tunnel) = tunnel {
-                    rules.push(
-                        self.get_allow_tunnel_rule(&tunnel.interface, allowed_tunnel_traffic)?,
+                    rules.extend(
+                        self.get_allow_tunnel_rule(&tunnel.interface, allowed_tunnel_traffic)?
+                            .into_iter(),
                     );
                 }
 
@@ -157,10 +158,13 @@ impl Firewall {
                 // can't leak to the wrong IPs in the tunnel or on the LAN.
                 rules.append(&mut self.get_block_dns_rules()?);
 
-                rules.push(self.get_allow_tunnel_rule(
-                    tunnel.interface.as_str(),
-                    &AllowedTunnelTraffic::All,
-                )?);
+                rules.extend(
+                    self.get_allow_tunnel_rule(
+                        tunnel.interface.as_str(),
+                        &AllowedTunnelTraffic::All,
+                    )?
+                    .into_iter(),
+                );
 
                 if *allow_lan {
                     rules.append(&mut self.get_allow_lan_rules()?);
@@ -329,8 +333,8 @@ impl Firewall {
         tunnel_interface: &str,
         allowed_traffic: &AllowedTunnelTraffic,
     ) -> Result<Option<pfctl::FilterRule>> {
-        let mut base_rule = self
-            .create_rule_builder(FilterRuleAction::Pass)
+        let mut rule_builder = self.create_rule_builder(FilterRuleAction::Pass);
+        let mut base_rule = rule_builder
             .quick(true)
             .interface(tunnel_interface)
             .keep_state(pfctl::StatePolicy::Keep)
