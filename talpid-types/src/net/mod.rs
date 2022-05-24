@@ -280,6 +280,7 @@ impl fmt::Display for AllowedEndpoint {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum AllowedTunnelTraffic {
+    None,
     All,
     Only(SocketAddr, Protocol),
 }

@@ -22,7 +22,7 @@ use std::{
     time::{Duration, Instant},
 };
 use talpid_types::{
-    net::{AllowedTunnelEndpoint, Protocol, TunnelParameters},
+    net::{AllowedTunnelTraffic, Protocol, TunnelParameters},
     tunnel::{ErrorStateCause, FirewallPolicyError},
     ErrorExt,
 };
@@ -48,7 +48,7 @@ pub struct ConnectingState {
     tunnel_events: TunnelEventsReceiver,
     tunnel_parameters: TunnelParameters,
     tunnel_metadata: Option<TunnelMetadata>,
-    allowed_tunnel_endpoints: Vec<AllowedTunnelEndpoint>,
+    allowed_tunnel_traffic: AllowedTunnelTraffic,
     tunnel_close_event: TunnelCloseEvent,
     tunnel_close_tx: oneshot::Sender<()>,
     retry_attempt: u32,
@@ -59,7 +59,7 @@ impl ConnectingState {
         shared_values: &mut SharedTunnelStateValues,
         params: &TunnelParameters,
         tunnel_metadata: &Option<TunnelMetadata>,
-        allowed_tunnel_endpoints: &[AllowedTunnelEndpoint],
+        allowed_tunnel_traffic: AllowedTunnelTraffic,
     ) -> Result<(), FirewallPolicyError> {
         #[cfg(target_os = "linux")]
         shared_values.disable_connectivity_check();
@@ -71,7 +71,7 @@ impl ConnectingState {
             tunnel: tunnel_metadata.clone(),
             allow_lan: shared_values.allow_lan,
             allowed_endpoint: shared_values.allowed_endpoint.clone(),
-            allowed_tunnel_endpoints: allowed_tunnel_endpoints.to_vec(),
+            allowed_tunnel_traffic,
             #[cfg(windows)]
             relay_client: TunnelMonitor::get_relay_client(&shared_values.resource_dir, &params),
         };
@@ -211,7 +211,7 @@ impl ConnectingState {
             tunnel_events: event_rx.fuse(),
             tunnel_parameters: parameters,
             tunnel_metadata: None,
-            allowed_tunnel_endpoints: vec![],
+            allowed_tunnel_traffic: AllowedTunnelTraffic::None,
             tunnel_close_event: tunnel_close_event_rx.fuse(),
             tunnel_close_tx,
             retry_attempt,
@@ -406,7 +406,7 @@ impl ConnectingState {
                 shared_values,
                 AfterDisconnect::Block(ErrorStateCause::AuthFailed(reason)),
             ),
-            Some((TunnelEvent::InterfaceUp(metadata), _done_tx)) => {
+            Some((TunnelEvent::InterfaceUp(metadata, allowed_tunnel_traffic), _done_tx)) => {
                 #[cfg(windows)]
                 if let Err(error) = shared_values
                     .split_tunnel
@@ -424,19 +424,7 @@ impl ConnectingState {
                     );
                 }
 
-                // FIXME: Do not set the firewall rules here. This is terribad.
-                // FIXME: Switch from allowing service once PSK has been exchanged. Don't always
-                // allow both
-                let ping_target = AllowedTunnelEndpoint {
-                    address: SocketAddr::V4(SocketAddrV4::new(metadata.ipv4_gateway, 0)),
-                    protocol: Protocol::IcmpV4,
-                };
-                let service_endpoint = AllowedTunnelEndpoint {
-                    address: SocketAddr::V4(SocketAddrV4::new(metadata.ipv4_gateway, 1337)),
-                    protocol: Protocol::Tcp,
-                };
-                self.allowed_tunnel_endpoints = vec![ping_target, service_endpoint];
-
+                self.allowed_tunnel_traffic = allowed_tunnel_traffic;
                 self.tunnel_metadata = Some(metadata);
 
                 match Self::set_firewall_policy(

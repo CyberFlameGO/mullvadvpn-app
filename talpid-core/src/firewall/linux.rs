@@ -558,7 +558,7 @@ impl<'a> PolicyBatch<'a> {
                 tunnel,
                 allow_lan,
                 allowed_endpoint,
-                allowed_tunnel_endpoints,
+                allowed_tunnel_endpoint,
             } => {
                 self.add_allow_tunnel_endpoint_rules(peer_endpoint);
                 self.add_allow_endpoint_rules(&allowed_endpoint.endpoint);
