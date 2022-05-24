@@ -278,11 +278,10 @@ impl fmt::Display for AllowedEndpoint {
     }
 }
 
-/// Defines a network for which traffic should be permitted by the firewall.
+/// Defines an endpoint for which traffic should be permitted by the firewall.
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct AllowedNetwork {
-    pub network: ipnetwork::IpNetwork,
-    pub port: u16,
+pub struct AllowedTunnelEndpoint {
+    pub address: SocketAddr,
     pub protocol: Protocol,
 }
 

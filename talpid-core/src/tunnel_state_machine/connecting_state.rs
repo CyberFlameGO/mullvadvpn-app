@@ -15,13 +15,14 @@ use futures::{
     FutureExt, StreamExt,
 };
 use std::{
+    net::{SocketAddr, SocketAddrV4},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
 use talpid_types::{
-    net::{AllowedNetwork, Protocol, TunnelParameters},
+    net::{AllowedTunnelEndpoint, Protocol, TunnelParameters},
     tunnel::{ErrorStateCause, FirewallPolicyError},
     ErrorExt,
 };
@@ -47,7 +48,7 @@ pub struct ConnectingState {
     tunnel_events: TunnelEventsReceiver,
     tunnel_parameters: TunnelParameters,
     tunnel_metadata: Option<TunnelMetadata>,
-    allowed_tunnel_nets: Vec<AllowedNetwork>,
+    allowed_tunnel_endpoints: Vec<AllowedTunnelEndpoint>,
     tunnel_close_event: TunnelCloseEvent,
     tunnel_close_tx: oneshot::Sender<()>,
     retry_attempt: u32,
@@ -58,7 +59,7 @@ impl ConnectingState {
         shared_values: &mut SharedTunnelStateValues,
         params: &TunnelParameters,
         tunnel_metadata: &Option<TunnelMetadata>,
-        allowed_tunnel_nets: &[AllowedNetwork],
+        allowed_tunnel_endpoints: &[AllowedTunnelEndpoint],
     ) -> Result<(), FirewallPolicyError> {
         #[cfg(target_os = "linux")]
         shared_values.disable_connectivity_check();
@@ -70,7 +71,7 @@ impl ConnectingState {
             tunnel: tunnel_metadata.clone(),
             allow_lan: shared_values.allow_lan,
             allowed_endpoint: shared_values.allowed_endpoint.clone(),
-            allowed_tunnel_nets: allowed_tunnel_nets.to_vec(),
+            allowed_tunnel_endpoints: allowed_tunnel_endpoints.to_vec(),
             #[cfg(windows)]
             relay_client: TunnelMonitor::get_relay_client(&shared_values.resource_dir, &params),
         };
@@ -210,7 +211,7 @@ impl ConnectingState {
             tunnel_events: event_rx.fuse(),
             tunnel_parameters: parameters,
             tunnel_metadata: None,
-            allowed_tunnel_nets: vec![],
+            allowed_tunnel_endpoints: vec![],
             tunnel_close_event: tunnel_close_event_rx.fuse(),
             tunnel_close_tx,
             retry_attempt,
@@ -298,7 +299,7 @@ impl ConnectingState {
             shared_values,
             &self.tunnel_parameters,
             &self.tunnel_metadata,
-            &self.allowed_tunnel_nets,
+            &self.allowed_tunnel_endpoints,
         ) {
             Ok(()) => {
                 cfg_if! {
@@ -338,7 +339,7 @@ impl ConnectingState {
                         shared_values,
                         &self.tunnel_parameters,
                         &self.tunnel_metadata,
-                        &self.allowed_tunnel_nets,
+                        &self.allowed_tunnel_endpoints,
                     ) {
                         let _ = tx.send(());
                         return self.disconnect(
@@ -426,18 +427,15 @@ impl ConnectingState {
                 // FIXME: Do not set the firewall rules here. This is terribad.
                 // FIXME: Switch from allowing service once PSK has been exchanged. Don't always
                 // allow both
-                let network = ipnetwork::IpNetwork::new(metadata.ipv4_gateway.into(), 32).unwrap();
-                let ping_target = AllowedNetwork {
-                    network,
-                    port: 0,
+                let ping_target = AllowedTunnelEndpoint {
+                    address: SocketAddr::V4(SocketAddrV4::new(metadata.ipv4_gateway, 0)),
                     protocol: Protocol::IcmpV4,
                 };
-                let service_endpoint = AllowedNetwork {
-                    network,
-                    port: 1337,
+                let service_endpoint = AllowedTunnelEndpoint {
+                    address: SocketAddr::V4(SocketAddrV4::new(metadata.ipv4_gateway, 1337)),
                     protocol: Protocol::Tcp,
                 };
-                self.allowed_tunnel_nets = vec![ping_target, service_endpoint];
+                self.allowed_tunnel_endpoints = vec![ping_target, service_endpoint];
 
                 self.tunnel_metadata = Some(metadata);
 
@@ -445,7 +443,7 @@ impl ConnectingState {
                     shared_values,
                     &self.tunnel_parameters,
                     &self.tunnel_metadata,
-                    &self.allowed_tunnel_nets,
+                    &self.allowed_tunnel_endpoints,
                 ) {
                     Ok(()) => SameState(self.into()),
                     Err(error) => self.disconnect(

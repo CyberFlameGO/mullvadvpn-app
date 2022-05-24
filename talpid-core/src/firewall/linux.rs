@@ -14,7 +14,7 @@ use std::{
     io,
     net::{IpAddr, Ipv4Addr},
 };
-use talpid_types::net::{AllowedNetwork, Endpoint, Protocol, TransportProtocol};
+use talpid_types::net::{AllowedTunnelEndpoint, Endpoint, Protocol, TransportProtocol};
 
 /// Priority for rules that tag split tunneling packets. Equals NF_IP_PRI_MANGLE.
 const MANGLE_CHAIN_PRIORITY: i32 = libc::NF_IP_PRI_MANGLE;
@@ -558,7 +558,7 @@ impl<'a> PolicyBatch<'a> {
                 tunnel,
                 allow_lan,
                 allowed_endpoint,
-                allowed_tunnel_nets,
+                allowed_tunnel_endpoints,
             } => {
                 self.add_allow_tunnel_endpoint_rules(peer_endpoint);
                 self.add_allow_endpoint_rules(&allowed_endpoint.endpoint);
@@ -568,7 +568,10 @@ impl<'a> PolicyBatch<'a> {
                 self.add_drop_dns_rule();
 
                 if let Some(tunnel) = tunnel {
-                    self.add_allow_tunnel_nets_rules(&tunnel.interface, allowed_tunnel_nets)?;
+                    self.add_allow_in_tunnel_endpoints_rules(
+                        &tunnel.interface,
+                        allowed_tunnel_endpoints,
+                    )?;
                     if *allow_lan {
                         self.add_block_cve_2019_14899(tunnel);
                     }
@@ -772,12 +775,12 @@ impl<'a> PolicyBatch<'a> {
         }
     }
 
-    fn add_allow_tunnel_nets_rules(
+    fn add_allow_in_tunnel_endpoints_rules(
         &mut self,
         tunnel_interface: &str,
-        allowed_nets: &[AllowedNetwork],
+        allowed_endpoints: &[AllowedTunnelEndpoint],
     ) -> Result<()> {
-        for net in allowed_nets {
+        for ep in allowed_endpoints {
             for (chain, dir, end) in [
                 (&self.out_chain, Direction::Out, End::Dst),
                 (&self.in_chain, Direction::In, End::Src),
@@ -785,16 +788,14 @@ impl<'a> PolicyBatch<'a> {
                 let mut rule = Rule::new(chain);
 
                 check_iface(&mut rule, dir, tunnel_interface)?;
-                check_net(&mut rule, end, net.network);
-                match net.protocol {
-                    Protocol::IcmpV4 | Protocol::IcmpV6 => {
-                        check_l4proto(&mut rule, net.protocol.clone())
-                    }
+                check_ip(&mut rule, end, ep.address.ip());
+                match ep.protocol {
+                    Protocol::IcmpV4 | Protocol::IcmpV6 => check_l4proto(&mut rule, ep.protocol),
                     Protocol::Tcp => {
-                        check_port(&mut rule, TransportProtocol::Tcp, end, net.port);
+                        check_port(&mut rule, TransportProtocol::Tcp, end, ep.address.port());
                     }
                     Protocol::Udp => {
-                        check_port(&mut rule, TransportProtocol::Udp, end, net.port);
+                        check_port(&mut rule, TransportProtocol::Udp, end, ep.address.port());
                     }
                 }
                 add_verdict(&mut rule, &Verdict::Accept);
