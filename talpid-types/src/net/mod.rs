@@ -278,7 +278,7 @@ impl fmt::Display for AllowedEndpoint {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum AllowedTunnelTraffic {
     None,
     All,
@@ -286,7 +286,7 @@ pub enum AllowedTunnelTraffic {
 }
 
 /// A protocol: UDP, TCP, or ICMP.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Protocol {
     Udp,
     Tcp,

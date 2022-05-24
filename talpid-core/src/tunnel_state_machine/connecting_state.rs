@@ -15,14 +15,13 @@ use futures::{
     FutureExt, StreamExt,
 };
 use std::{
-    net::{SocketAddr, SocketAddrV4},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
 };
 use talpid_types::{
-    net::{AllowedTunnelTraffic, Protocol, TunnelParameters},
+    net::{AllowedTunnelTraffic, TunnelParameters},
     tunnel::{ErrorStateCause, FirewallPolicyError},
     ErrorExt,
 };
@@ -299,7 +298,7 @@ impl ConnectingState {
             shared_values,
             &self.tunnel_parameters,
             &self.tunnel_metadata,
-            &self.allowed_tunnel_endpoints,
+            self.allowed_tunnel_traffic.clone(),
         ) {
             Ok(()) => {
                 cfg_if! {
@@ -339,7 +338,7 @@ impl ConnectingState {
                         shared_values,
                         &self.tunnel_parameters,
                         &self.tunnel_metadata,
-                        &self.allowed_tunnel_endpoints,
+                        self.allowed_tunnel_traffic.clone(),
                     ) {
                         let _ = tx.send(());
                         return self.disconnect(
@@ -431,7 +430,7 @@ impl ConnectingState {
                     shared_values,
                     &self.tunnel_parameters,
                     &self.tunnel_metadata,
-                    &self.allowed_tunnel_endpoints,
+                    self.allowed_tunnel_traffic.clone(),
                 ) {
                     Ok(()) => SameState(self.into()),
                     Err(error) => self.disconnect(
@@ -560,9 +559,12 @@ impl TunnelState for ConnectingState {
                     return ErrorState::enter(shared_values, ErrorStateCause::SplitTunnelError);
                 }
 
-                if let Err(error) =
-                    Self::set_firewall_policy(shared_values, &tunnel_parameters, &None, &[])
-                {
+                if let Err(error) = Self::set_firewall_policy(
+                    shared_values,
+                    &tunnel_parameters,
+                    &None,
+                    AllowedTunnelTraffic::None,
+                ) {
                     ErrorState::enter(
                         shared_values,
                         ErrorStateCause::SetFirewallPolicyError(error),

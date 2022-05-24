@@ -280,7 +280,7 @@ impl WireguardMonitor {
             } else {
                 AllowedTunnelTraffic::Only(
                     SocketAddrV4::new(config.ipv4_gateway, 0).into(),
-                    Protocol::Icmp,
+                    Protocol::IcmpV4,
                 )
             };
             (on_event)(TunnelEvent::InterfaceUp(metadata.clone(), allowed_traffic)).await;
@@ -339,7 +339,7 @@ impl WireguardMonitor {
 
                 let allowed_traffic = AllowedTunnelTraffic::Only(
                     SocketAddrV4::new(config.ipv4_gateway, 0).into(),
-                    Protocol::Icmp,
+                    Protocol::IcmpV4,
                 );
                 (on_event)(TunnelEvent::InterfaceUp(metadata.clone(), allowed_traffic)).await;
             }
